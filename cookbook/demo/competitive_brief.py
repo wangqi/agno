@@ -2,13 +2,12 @@ import asyncio
 from datetime import datetime
 
 from agno.agent import Agent
-from agno.db.postgres import PostgresDb
 from agno.models.anthropic import Claude
 from agno.tools.exa import ExaTools
 from agno.workflow import WorkflowAgent
 from agno.workflow.step import Step
 from agno.workflow.workflow import Workflow
-from db import db
+from db import demo_db
 
 # =========================
 # CONFIG
@@ -82,10 +81,10 @@ workflow_agent = WorkflowAgent(model=Claude(id=MODEL_ID), num_history_runs=4)
 # =========================
 competitive_brief = Workflow(
     name="Competitive Brief",
-    description="Plan and compare competitive briefs",
+    description="Generate a competitive brief between two products. First plan the brief, then compare the products.",
     agent=workflow_agent,
     steps=[plan_step, compare_step],
-    db=db,
+    db=demo_db,
 )
 
 
