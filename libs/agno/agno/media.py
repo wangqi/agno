@@ -4,6 +4,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, field_validator, model_validator
 
+from agno.utils.log import log_error
+
 
 class Image(BaseModel):
     """Unified Image class for all use cases (input, output, artifacts)"""
@@ -395,10 +397,20 @@ class File(BaseModel):
         name: Optional[str] = None,
         format: Optional[str] = None,
     ) -> "File":
-        """Create File from base64 encoded content"""
+        """Create File from base64 encoded content or plain text.
+
+        Handles both base64-encoded binary content and plain text content
+        (which is stored as UTF-8 strings for text/* MIME types).
+        """
         import base64
 
-        content_bytes = base64.b64decode(base64_content)
+        try:
+            content_bytes = base64.b64decode(base64_content)
+        except Exception:
+            # If not valid base64, it might be plain text content (text/csv, text/plain, etc.)
+            # which is stored as UTF-8 strings, not base64
+            content_bytes = base64_content.encode("utf-8")
+
         return cls(
             content=content_bytes,
             id=id,
@@ -413,12 +425,32 @@ class File(BaseModel):
         import httpx
 
         if self.url:
-            response = httpx.get(self.url)
-            content = response.content
-            mime_type = response.headers.get("Content-Type", "").split(";")[0]
-            return content, mime_type
+            try:
+                response = httpx.get(self.url)
+                content = response.content
+                mime_type = response.headers.get("Content-Type", "").split(";")[0]
+                return content, mime_type
+            except Exception:
+                log_error(f"Failed to download file from {self.url}")
+                return None
         else:
             return None
+
+    def get_content_bytes(self) -> Optional[bytes]:
+        if self.content:
+            if isinstance(self.content, bytes):
+                return self.content
+            elif isinstance(self.content, str):
+                return self.content.encode("utf-8")
+            return None
+        elif self.url:
+            import httpx
+
+            return httpx.get(self.url).content
+        elif self.filepath:
+            with open(self.filepath, "rb") as f:
+                return f.read()
+        return None
 
     def _normalise_content(self) -> Optional[Union[str, bytes]]:
         if self.content is None:
